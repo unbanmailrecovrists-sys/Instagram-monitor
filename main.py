@@ -2,6 +2,7 @@ import discord
 from discord.ext import tasks, commands
 import requests
 import time
+import os
 from flask import Flask
 from threading import Thread
 
