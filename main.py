@@ -5,10 +5,10 @@ import os
 from flask import Flask
 from threading import Thread
 
-# --- WEB SERVER FOR 24/7 ---
+# --- WEB SERVER ---
 app = Flask('')
 @app.route('/')
-def home(): return "Telegram Bot is Live & Accurate!"
+def home(): return "Bot is Online!"
 
 def run(): app.run(host='0.0.0.0', port=8080)
 def keep_alive():
@@ -23,67 +23,65 @@ monitored_accounts = {}
 # --- ACCURATE CHECKING LOGIC ---
 def check_instagram(username):
     url = f"https://www.instagram.com/{username}/"
+    # Strong headers to mimic a real browser
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
     }
+    
     try:
-        response = requests.get(url, headers=headers, timeout=15)
+        # We use a session to handle cookies if needed
+        session = requests.Session()
+        response = session.get(url, headers=headers, timeout=20)
         content = response.text
         
-        # Check 1: Agar 404 hai toh confirm ban hai
-        if response.status_code == 404:
-            return False
+        # Check 1: Agar page par "login" ya "password" bahut zyada hai, toh wo profile nahi hai
+        if "Login" in content and "Password" in content and "signup" in content:
+            return False # Ye sirf login screen hai, profile nahi
             
-        # Check 2: Agar 200 hai toh check karein ki asli profile hai ya sirf login wall
+        # Check 2: Asli profile par 'Followers' ya 'biography' ka data hota hai
         if response.status_code == 200:
-            # Asli profile par 'Followers' ya 'Posts' likha hota hai
-            if 'Followers' in content or 'Posts' in content or 'Following' in content:
+            if 'Follower' in content or 'Following' in content or 'logging_page_id' not in content:
+                # Agar "logging_page_id" content mein nahi hai, matlab ye login page nahi hai
                 return True
-            return False
+        
+        return False
     except:
-        pass
-    return False
+        return False
 
 def monitor_loop():
     while True:
-        # List ka copy banate hain taaki loop mein error na aaye
         for username, data in list(monitored_accounts.items()):
             if check_instagram(username):
-                bot.send_message(data["chat_id"], f"🏆 **Account Recovered!**\n\nUser: @{username}\nCheck karein: https://www.instagram.com/{username}/")
+                bot.send_message(data["chat_id"], f"🏆 **Account Recovered!**\n\nUser: @{username}\nLink: https://www.instagram.com/{username}/")
                 del monitored_accounts[username]
-        time.sleep(300) # Har 5 minute mein check karega
+        time.sleep(300)
 
 # --- COMMANDS ---
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.reply_to(message, "Bot Active! Use `/add username` to monitor an Instagram account.")
+    bot.reply_to(message, "Bot Active! Use `/add username` to monitor.")
 
 @bot.message_handler(commands=['add'])
 def add_account(message):
     try:
         username = message.text.split()[1].replace('@', '')
-        bot.reply_to(message, f"🔍 Checking @{username} status...")
+        bot.reply_to(message, f"🔍 Checking @{username}...")
         
-        if check_instagram(username):
-            bot.reply_to(message, f"✅ @{username} toh pehle se hi Live hai! Ise monitor karne ki zaroorat nahi.")
+        is_live = check_instagram(username)
+        
+        if is_live:
+            bot.reply_to(message, f"✅ @{username} Live hai!")
         else:
             monitored_accounts[username] = {"chat_id": message.chat.id}
-            bot.reply_to(message, f"🚀 Monitoring started for @{username}. Recover hote hi main message bhej dunga.")
+            bot.reply_to(message, f"🚀 Monitoring started for @{username}.")
     except:
-        bot.reply_to(message, "Usage: `/add username` (Example: /add instagram)")
+        bot.reply_to(message, "Usage: `/add username`")
 
-@bot.message_handler(commands=['list'])
-def list_accounts(message):
-    if not monitored_accounts:
-        bot.reply_to(message, "Abhi koi account monitor nahi ho raha.")
-        return
-    res = "\n".join([f"• @{u}" for u in monitored_accounts.keys()])
-    bot.reply_to(message, f"📋 Current Monitoring List:\n{res}")
-
-# --- START BOT ---
 if __name__ == "__main__":
     keep_alive()
     Thread(target=monitor_loop).start()
-    print("Accurate Telegram Bot Started...")
     bot.infinity_polling()
