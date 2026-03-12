@@ -21,8 +21,8 @@ def keep_alive():
     t.start()
 
 # --- BOT CONFIGURATION ---
-TOKEN = 'MTQ4MTUzMjQ4MzkzMjY1NTY5Nw.GIPjXM.WUSRb-xpsMiQTYM6TZul_5OYZwRVWsSgDWRRf4'
-CHANNEL_ID = 1481531607415525409
+TOKEN = 'MTQ4MTUzMjQ4MzkzMjY1NTY5Nw.GxDoEf.7WKVXLEzxxAV3MbTVp7QeHBwEcM6tfdgWq7rZo'
+CHANNEL_ID = 1481540811299622943
 
 intents = discord.Intents.default()
 intents.message_content = True
