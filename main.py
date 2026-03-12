@@ -21,7 +21,7 @@ def keep_alive():
     t.start()
 
 # --- BOT CONFIGURATION ---
-TOKEN = 'MTQ4MTUzMjQ4MzkzMjY1NTY5Nw.GxDoEf.7WKVXLEzxxAV3MbTVp7QeHBwEcM6tfdgWq7rZo'
+TOKEN = os.getenv('DISCORD_TOKEN')
 CHANNEL_ID = 1481540811299622943
 
 intents = discord.Intents.default()
