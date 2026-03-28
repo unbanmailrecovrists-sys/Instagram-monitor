@@ -22,14 +22,19 @@ scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 
 
 def get_ig_status(username):
     try:
-        url = f"https://www.instagram.com/{username}/"
-        response = scraper.get(url, timeout=15)
-        content = response.text.lower()
-        if response.status_code == 404 or "broken link" in content or "content isn't available" in content:
-            return "BANNED"
+        # Bina login ke profile check karne ka sabse accurate tarika
+        import instaloader
+        L = instaloader.Instaloader()
+        instaloader.Profile.from_username(L.context, username)
         return "ACTIVE"
-    except:
+    except instaloader.exceptions.ProfileNotExistsException:
+        # Agar profile nahi milti (Ban ya Delete)
+        return "BANNED"
+    except Exception as e:
+        # Agar Instagram block kare toh error dikhayega
+        print(f"Error checking {username}: {e}")
         return "ERROR"
+
 
 # --- COMMANDS ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
