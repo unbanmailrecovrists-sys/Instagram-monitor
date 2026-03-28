@@ -1,62 +1,58 @@
 import os
-import instaloader
-from flask import Flask
-from threading import Thread
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+import requests
+import cloudscraper
 
-# --- WEB SERVER ---
-app = Flask('')
-@app.route('/')
-def home(): return "Bot is Online!"
+# CONFIG (Yahan apna Webhook URL dalo)
+DISCORD_WEBHOOK = "YAHAN_APNA_WEBHOOK_URL"
+ACCOUNTS = ['zuck', 'croprated', 'urx.ganesh'] 
+STATUS_FILE = "status.txt"
 
-def run():
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
-
-# --- CONFIG ---
-TOKEN = '8689195046:AAEotMhY0k3XRxd-MQ4piCZUTZvRH1sG6RQ'
-CHAT_ID = '5590079891'
-IG_USER = 'monitor_ig'
-IG_PASS = '1q2w3e4r5t'
-
-L = instaloader.Instaloader()
-monitored_accounts = set()
-
-# --- LOGIN (Sirf ek baar startup par) ---
-try:
-    L.login(IG_USER, IG_PASS)
-    print("✅ IG Login Successful!")
-except Exception as e:
-    print(f"⚠️ Login Warning: {e} (Bot checking as guest)")
+scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
 
 def get_ig_status(username):
+    url = f"https://www.instagram.com/{username}/"
     try:
-        # Login ke sath check karega toh accurate aayega
-        instaloader.Profile.from_username(L.context, username)
-        return "ACTIVE"
-    except instaloader.exceptions.ProfileNotExistsException:
-        return "BANNED"
-    except Exception:
+        response = scraper.get(url, timeout=15)
+        if response.status_code == 404:
+            return "BANNED"
+        if response.status_code == 200:
+            return "ACTIVE"
+        return "ERROR"
+    except:
         return "ERROR"
 
-# --- TELEGRAM COMMANDS ---
-async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if context.args:
-        user = context.args[0].replace('@', '').lower()
-        status = get_ig_status(user)
-        icon = "🟢" if status == "ACTIVE" else "🚨"
-        await update.message.reply_text(f"{icon} @{user}: {status}")
+def send_discord(msg):
+    requests.post(DISCORD_WEBHOOK, json={"content": msg})
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🚀 IG Monitor Online!\n/add username\n/check username")
+# Load old status
+old_status = {}
+if os.path.exists(STATUS_FILE):
+    with open(STATUS_FILE, "r") as f:
+        for line in f:
+            if ":" in line:
+                u, s = line.strip().split(":")
+                old_status[u] = s
 
-def main():
-    Thread(target=run).start()
-    application = Application.builder().token(TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("check", check))
-    # Baki commands (add/del) yahan add kar sakte ho
-    application.run_polling()
+new_status_list = []
+alerts = ""
 
-if __name__ == '__main__':
-    main()
+for user in ACCOUNTS:
+    current = get_ig_status(user)
+    if current == "ERROR": continue
+    
+    previous = old_status.get(user, "ACTIVE")
+    if current == "BANNED" and previous == "ACTIVE":
+        alerts += f"🚨 **BAN ALERT:** @{user} is now **BANNED**!\n"
+    elif current == "ACTIVE" and previous == "BANNED":
+        alerts += f"✅ **UNBAN ALERT:** @{user} is **RECOVERED**!\n"
+    
+    new_status_list.append(f"{user}:{current}")
+
+with open(STATUS_FILE, "w") as f:
+    f.write("\n".join(new_status_list))
+
+if alerts:
+    send_discord(alerts)
+else:
+    # Optional: Bas ye dekhne ke liye ki bot zinda hai
+    print("Everything is same. No alerts.")
