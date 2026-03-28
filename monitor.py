@@ -1,115 +1,62 @@
 import os
-import cloudscraper
+import instaloader
 from flask import Flask
 from threading import Thread
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-# --- WEB SERVER FOR RENDER ---
+# --- WEB SERVER ---
 app = Flask('')
 @app.route('/')
-def home(): return "Bot is Running!"
+def home(): return "Bot is Online!"
 
 def run():
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
 # --- CONFIG ---
-TOKEN = '8689195046:AAEotMhY0k3XRxd-MQ4piCZUTZvRH1sG6RQ'
-CHAT_ID = '5590079891'
+TOKEN = 'APNA_BOT_TOKEN'
+CHAT_ID = 'APNA_CHAT_ID'
+IG_USER = 'APNA_IG_USERNAME'
+IG_PASS = 'APNA_IG_PASSWORD'
 
+L = instaloader.Instaloader()
 monitored_accounts = set()
-scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
+
+# --- LOGIN (Sirf ek baar startup par) ---
+try:
+    L.login(IG_USER, IG_PASS)
+    print("✅ IG Login Successful!")
+except Exception as e:
+    print(f"⚠️ Login Warning: {e} (Bot checking as guest)")
 
 def get_ig_status(username):
     try:
-        url = f"https://www.instagram.com/{username}/"
-        # Browser jaisa behavior banane ke liye headers
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
-        }
-        response = scraper.get(url, headers=headers, timeout=15)
-        
-        # 1. Agar 404 hai toh confirm BAN hai
-        if response.status_code == 404:
-            return "BANNED"
-        
-        # 2. Page ka content check karna
-        content = response.text.lower()
-        
-        # Agar ye phrases milte hain toh account BAN ya broken hai
-        ban_phrases = [
-            "link you followed may be broken", 
-            "content isn't available", 
-            "page isn't available",
-            "sorry, this page isn't available"
-        ]
-        
-        if any(phrase in content for phrase in ban_phrases):
-            return "BANNED"
-            
-        # 3. Agar status 200 hai aur ban phrases nahi hain, toh ACTIVE hai
-        if response.status_code == 200:
-            return "ACTIVE"
-            
-        return "UNKNOWN"
+        # Login ke sath check karega toh accurate aayega
+        instaloader.Profile.from_username(L.context, username)
+        return "ACTIVE"
+    except instaloader.exceptions.ProfileNotExistsException:
+        return "BANNED"
     except Exception:
         return "ERROR"
 
-
-# --- COMMANDS ---
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🤖 IG Monitor Bot Online!\n\n/add username - List mein daalein\n/check username - Turant check karein\n/list - Saari list dekhein\n/del username - List se hatayein")
-
-async def add(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if str(update.message.chat_id) != CHAT_ID: return
-    if context.args:
-        user = context.args[0].replace('@', '').lower()
-        monitored_accounts.add(user)
-        await update.message.reply_text(f"✅ @{user} ko monitoring list mein add kar diya gaya hai.")
-    else:
-        await update.message.reply_text("Sahi tarika: `/add username`")
-
+# --- TELEGRAM COMMANDS ---
 async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if str(update.message.chat_id) != CHAT_ID: return
     if context.args:
         user = context.args[0].replace('@', '').lower()
         status = get_ig_status(user)
         icon = "🟢" if status == "ACTIVE" else "🚨"
         await update.message.reply_text(f"{icon} @{user}: {status}")
 
-async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if str(update.message.chat_id) != CHAT_ID: return
-    user = context.args[0].lower()
-    if user in monitored_accounts:
-        monitored_accounts.remove(user)
-        await update.message.reply_text(f"🗑️ @{user} removed.")
-
-async def list_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not monitored_accounts:
-        await update.message.reply_text("List khali hai.")
-    else:
-        await update.message.reply_text(f"📋 Tracking: {', '.join(monitored_accounts)}")
-
-# --- AUTO CHECK EVERY 10 MIN ---
-async def auto_check(context: ContextTypes.DEFAULT_TYPE):
-    for user in list(monitored_accounts):
-        if get_ig_status(user) == "BANNED":
-            await context.bot.send_message(chat_id=CHAT_ID, text=f"🚨 ALERT: @{user} BAN HO GAYA!")
-            monitored_accounts.remove(user)
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🚀 IG Monitor Online!\n/add username\n/check username")
 
 def main():
     Thread(target=run).start()
-    app_tg = Application.builder().token(TOKEN).build()
-    app_tg.add_handler(CommandHandler("start", start))
-    app_tg.add_handler(CommandHandler("add", add))
-    app_tg.add_handler(CommandHandler("check", check))
-    app_tg.add_handler(CommandHandler("del", delete))
-    app_tg.add_handler(CommandHandler("list", list_all))
-    
-    if app_tg.job_queue:
-        app_tg.job_queue.run_repeating(auto_check, interval=600, first=10)
-    
-    app_tg.run_polling()
+    application = Application.builder().token(TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("check", check))
+    # Baki commands (add/del) yahan add kar sakte ho
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
