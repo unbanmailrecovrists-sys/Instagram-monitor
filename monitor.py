@@ -14,8 +14,8 @@ def run():
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
 # --- CONFIG ---
-TOKEN = 'APNA_TELEGRAM_TOKEN'
-CHAT_ID = 'APNA_CHAT_ID'
+TOKEN = '8689195046:AAEotMhY0k3XRxd-MQ4piCZUTZvRH1sG6RQ'
+CHAT_ID = '5590079891'
 
 monitored_accounts = set()
 scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
