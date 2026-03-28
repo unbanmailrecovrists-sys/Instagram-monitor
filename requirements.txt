@@ -1,4 +1,3 @@
 python-telegram-bot[job-queue]
-cloudscraper
-flask
 instaloader
+flask
