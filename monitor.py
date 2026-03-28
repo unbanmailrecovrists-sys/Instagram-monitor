@@ -22,17 +22,37 @@ scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 
 
 def get_ig_status(username):
     try:
-        # Bina login ke profile check karne ka sabse accurate tarika
-        import instaloader
-        L = instaloader.Instaloader()
-        instaloader.Profile.from_username(L.context, username)
-        return "ACTIVE"
-    except instaloader.exceptions.ProfileNotExistsException:
-        # Agar profile nahi milti (Ban ya Delete)
-        return "BANNED"
-    except Exception as e:
-        # Agar Instagram block kare toh error dikhayega
-        print(f"Error checking {username}: {e}")
+        url = f"https://www.instagram.com/{username}/"
+        # Browser jaisa behavior banane ke liye headers
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+        }
+        response = scraper.get(url, headers=headers, timeout=15)
+        
+        # 1. Agar 404 hai toh confirm BAN hai
+        if response.status_code == 404:
+            return "BANNED"
+        
+        # 2. Page ka content check karna
+        content = response.text.lower()
+        
+        # Agar ye phrases milte hain toh account BAN ya broken hai
+        ban_phrases = [
+            "link you followed may be broken", 
+            "content isn't available", 
+            "page isn't available",
+            "sorry, this page isn't available"
+        ]
+        
+        if any(phrase in content for phrase in ban_phrases):
+            return "BANNED"
+            
+        # 3. Agar status 200 hai aur ban phrases nahi hain, toh ACTIVE hai
+        if response.status_code == 200:
+            return "ACTIVE"
+            
+        return "UNKNOWN"
+    except Exception:
         return "ERROR"
 
 
