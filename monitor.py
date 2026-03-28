@@ -1,15 +1,23 @@
 import os
-import requests
 import cloudscraper
+from flask import Flask
+from threading import Thread
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 
-# GitHub Secrets se data uthayega
-TOKEN = os.environ.get('BOT_TOKEN')
-CHAT_ID = os.environ.get('CHAT_ID')
+# --- WEB SERVER FOR RENDER ---
+app = Flask('')
+@app.route('/')
+def home(): return "Bot is Running!"
 
-# ACCOUNTS LIST: Yahan wo usernames dalo jo monitor karne hain
-ACCOUNTS = ['zuck', 'croprated', 'okay.byie'] 
-STATUS_FILE = "status.txt"
+def run():
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
+# --- CONFIG ---
+TOKEN = 'APNA_TELEGRAM_TOKEN'
+CHAT_ID = 'APNA_CHAT_ID'
+
+monitored_accounts = set()
 scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
 
 def get_ig_status(username):
@@ -17,45 +25,66 @@ def get_ig_status(username):
         url = f"https://www.instagram.com/{username}/"
         response = scraper.get(url, timeout=15)
         content = response.text.lower()
-        ban_phrases = ["broken link", "content isn't available", "page isn't available"]
-        
-        if response.status_code == 404 or any(p in content for p in ban_phrases):
+        if response.status_code == 404 or "broken link" in content or "content isn't available" in content:
             return "BANNED"
-        if response.status_code == 200:
-            return "ACTIVE"
-        return "ERROR"
+        return "ACTIVE"
     except:
         return "ERROR"
 
-def send_telegram(msg):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"})
+# --- COMMANDS ---
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🤖 IG Monitor Bot Online!\n\n/add username - List mein daalein\n/check username - Turant check karein\n/list - Saari list dekhein\n/del username - List se hatayein")
 
-# Purana status load karna
-old_status = {}
-if os.path.exists(STATUS_FILE):
-    with open(STATUS_FILE, "r") as f:
-        for line in f:
-            if ":" in line:
-                u, s = line.strip().split(":")
-                old_status[u] = s
+async def add(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if str(update.message.chat_id) != CHAT_ID: return
+    if context.args:
+        user = context.args[0].replace('@', '').lower()
+        monitored_accounts.add(user)
+        await update.message.reply_text(f"✅ @{user} ko monitoring list mein add kar diya gaya hai.")
+    else:
+        await update.message.reply_text("Sahi tarika: `/add username`")
 
-new_status_list = []
-alerts = ""
+async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if str(update.message.chat_id) != CHAT_ID: return
+    if context.args:
+        user = context.args[0].replace('@', '').lower()
+        status = get_ig_status(user)
+        icon = "🟢" if status == "ACTIVE" else "🚨"
+        await update.message.reply_text(f"{icon} @{user}: {status}")
 
-for user in ACCOUNTS:
-    current = get_ig_status(user)
-    previous = old_status.get(user, "ACTIVE")
+async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if str(update.message.chat_id) != CHAT_ID: return
+    user = context.args[0].lower()
+    if user in monitored_accounts:
+        monitored_accounts.remove(user)
+        await update.message.reply_text(f"🗑️ @{user} removed.")
 
-    if current == "BANNED" and previous == "ACTIVE":
-        alerts += f"🚨 **ALERT: @{user} BAN ho gaya hai!**\n"
-    elif current == "ACTIVE" and previous == "BANNED":
-        alerts += f"✅ **GOOD NEWS: @{user} UNBAN (Recovered)!**\n"
+async def list_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not monitored_accounts:
+        await update.message.reply_text("List khali hai.")
+    else:
+        await update.message.reply_text(f"📋 Tracking: {', '.join(monitored_accounts)}")
+
+# --- AUTO CHECK EVERY 10 MIN ---
+async def auto_check(context: ContextTypes.DEFAULT_TYPE):
+    for user in list(monitored_accounts):
+        if get_ig_status(user) == "BANNED":
+            await context.bot.send_message(chat_id=CHAT_ID, text=f"🚨 ALERT: @{user} BAN HO GAYA!")
+            monitored_accounts.remove(user)
+
+def main():
+    Thread(target=run).start()
+    app_tg = Application.builder().token(TOKEN).build()
+    app_tg.add_handler(CommandHandler("start", start))
+    app_tg.add_handler(CommandHandler("add", add))
+    app_tg.add_handler(CommandHandler("check", check))
+    app_tg.add_handler(CommandHandler("del", delete))
+    app_tg.add_handler(CommandHandler("list", list_all))
     
-    new_status_list.append(f"{user}:{current}")
+    if app_tg.job_queue:
+        app_tg.job_queue.run_repeating(auto_check, interval=600, first=10)
+    
+    app_tg.run_polling()
 
-with open(STATUS_FILE, "w") as f:
-    f.write("\n".join(new_status_list))
-
-if alerts:
-    send_telegram(alerts)
+if __name__ == '__main__':
+    main()
