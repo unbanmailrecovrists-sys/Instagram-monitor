@@ -14,10 +14,10 @@ def run():
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
 # --- CONFIG ---
-TOKEN = 'APNA_BOT_TOKEN'
-CHAT_ID = 'APNA_CHAT_ID'
-IG_USER = 'APNA_IG_USERNAME'
-IG_PASS = 'APNA_IG_PASSWORD'
+TOKEN = '8689195046:AAEotMhY0k3XRxd-MQ4piCZUTZvRH1sG6RQ'
+CHAT_ID = '5590079891'
+IG_USER = 'monitor_ig'
+IG_PASS = '1q2w3e4r5t'
 
 L = instaloader.Instaloader()
 monitored_accounts = set()
