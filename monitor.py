@@ -2,7 +2,7 @@ import os
 import requests
 import cloudscraper
 
-# CONFIG (Yahan apna Webhook URL dalo)
+# CONFIG (Yahan apna Discord Webhook URL dalo)
 DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1487352962400391208/Uh2P1nrMIXxHJIwI2xnOQOCpaN1qi-LnQCcHRsHknSglabIT3N-YB2ZLfembg7PY4UGH"
 ACCOUNTS = ['zuck', 'croprated', 'urx.ganesh'] 
 STATUS_FILE = "status.txt"
@@ -53,6 +53,3 @@ with open(STATUS_FILE, "w") as f:
 
 if alerts:
     send_discord(alerts)
-else:
-    # Optional: Bas ye dekhne ke liye ki bot zinda hai
-    print("Everything is same. No alerts.")
