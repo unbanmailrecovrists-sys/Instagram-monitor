@@ -1,55 +1,70 @@
+import discord
+from discord.ext import commands, tasks
+import instaloader
 import os
-import requests
-import cloudscraper
+import time
 
-# CONFIG (Yahan apna Discord Webhook URL dalo)
-DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1487352962400391208/Uh2P1nrMIXxHJIwI2xnOQOCpaN1qi-LnQCcHRsHknSglabIT3N-YB2ZLfembg7PY4UGH"
-ACCOUNTS = ['zuck', 'croprated', 'urx.ganesh'] 
-STATUS_FILE = "status.txt"
+# --- CONFIG ---
+TOKEN = os.environ.get('DISCORD_TOKEN') # Discord Bot Token
+IG_USER = "aapka_fake_username"        # Instagram Username
+IG_PASS = "aapka_fake_password"        # Instagram Password
+CHANNEL_ID = int(os.environ.get('CHANNEL_ID', 0))
+ACCOUNTS = ['zuck', 'croprated', 'urx.rupesh']
 
-scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-def get_ig_status(username):
-    url = f"https://www.instagram.com/{username}/"
+# Instaloader Setup
+L = instaloader.Instaloader()
+
+def login_instagram():
     try:
-        response = scraper.get(url, timeout=15)
-        if response.status_code == 404:
-            return "BANNED"
-        if response.status_code == 200:
-            return "ACTIVE"
+        # Session file check karega taaki baar-baar login na karna pade
+        session_file = f"session_{IG_USER}"
+        if os.path.exists(session_file):
+            L.load_session_from_file(IG_USER, filename=session_file)
+            print("✅ Session loaded from file!")
+        else:
+            L.login(IG_USER, IG_PASS)
+            L.save_session_to_file(filename=session_file)
+            print("✅ New Login Successful!")
+    except Exception as e:
+        print(f"❌ Login Failed: {e}")
+
+def get_status(username):
+    try:
+        # Real login session ke sath check
+        instaloader.Profile.from_username(L.context, username)
+        return "ACTIVE"
+    except instaloader.exceptions.ProfileNotExistsException:
+        return "BANNED"
+    except instaloader.exceptions.ConnectionException:
+        return "RATE_LIMIT (IP Blocked)"
+    except Exception:
         return "ERROR"
-    except:
-        return "ERROR"
 
-def send_discord(msg):
-    requests.post(DISCORD_WEBHOOK, json={"content": msg})
+@bot.event
+async def on_ready():
+    print(f"✅ Bot Online: {bot.user}")
+    login_instagram()
+    auto_monitor.start()
 
-# Load old status
-old_status = {}
-if os.path.exists(STATUS_FILE):
-    with open(STATUS_FILE, "r") as f:
-        for line in f:
-            if ":" in line:
-                u, s = line.strip().split(":")
-                old_status[u] = s
+@bot.command()
+async def check(ctx, user: str):
+    user = user.replace('@', '').lower()
+    await ctx.send(f"🔍 Checking **@{user}** using Login Session...")
+    status = get_status(user)
+    await ctx.send(f"📊 **@{user}** status: **{status}**")
 
-new_status_list = []
-alerts = ""
+@tasks.loop(minutes=20)
+async def auto_monitor():
+    channel = bot.get_channel(CHANNEL_ID)
+    if not channel: return
+    for user in ACCOUNTS:
+        status = get_status(user)
+        if status == "BANNED":
+            await channel.send(f"🚨 **ALERT:** @{user} is **BANNED**!")
+        time.sleep(10) # Gap taaki IG ko shak na ho
 
-for user in ACCOUNTS:
-    current = get_ig_status(user)
-    if current == "ERROR": continue
-    
-    previous = old_status.get(user, "ACTIVE")
-    if current == "BANNED" and previous == "ACTIVE":
-        alerts += f"🚨 **BAN ALERT:** @{user} is now **BANNED**!\n"
-    elif current == "ACTIVE" and previous == "BANNED":
-        alerts += f"✅ **UNBAN ALERT:** @{user} is **RECOVERED**!\n"
-    
-    new_status_list.append(f"{user}:{current}")
-
-with open(STATUS_FILE, "w") as f:
-    f.write("\n".join(new_status_list))
-
-if alerts:
-    send_discord(alerts)
+bot.run(TOKEN)
