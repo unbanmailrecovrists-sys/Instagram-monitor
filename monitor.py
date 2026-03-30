@@ -6,8 +6,8 @@ import time
 
 # --- CONFIG ---
 TOKEN = os.environ.get('DISCORD_TOKEN') # Discord Bot Token
-IG_USER = "aapka_fake_username"        # Instagram Username
-IG_PASS = "aapka_fake_password"        # Instagram Password
+IG_USER = "monitor_ig"        # Instagram Username
+IG_PASS = "1q2w3e4r5t"        # Instagram Password
 CHANNEL_ID = int(os.environ.get('CHANNEL_ID', 0))
 ACCOUNTS = ['zuck', 'croprated', 'urx.rupesh']
 
