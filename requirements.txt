@@ -1,3 +1,5 @@
-python-telegram-bot[job-queue]
+discord.py
+requests
 instaloader
 flask
+
