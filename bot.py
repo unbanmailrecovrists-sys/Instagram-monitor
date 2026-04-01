@@ -39,6 +39,7 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 # ─── INSTAGRAM CHECK ──────────────────────────────────────
+
 def check_instagram(username: str) -> str:
     url = f"https://www.instagram.com/{username}/"
     try:
@@ -46,7 +47,11 @@ def check_instagram(username: str) -> str:
         if r.status_code == 404:
             return "banned"
         if r.status_code == 200:
-            if '"user":null' in r.text or "Sorry, this page" in r.text:
+            if ('"user":null' in r.text
+                or "Sorry, this page" in r.text
+                or "PageNotFound" in r.text
+                or '"is_private":' not in r.text
+                and '"biography":' not in r.text):
                 return "banned"
             return "active"
         return "error"
