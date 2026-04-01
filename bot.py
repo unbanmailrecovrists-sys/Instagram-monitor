@@ -42,31 +42,25 @@ bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 def check_instagram(username: str) -> str:
     """active | banned | error"""
-    url = f"https://www.instagram.com/{username}/"
+    # Method: oEmbed API use karo (Instagram ka official public API)
+    url = f"https://www.instagram.com/oembed/?url=https://www.instagram.com/{username}/"
     try:
-        r = requests.get(url, headers=HEADERS, timeout=15, allow_redirects=True)
+        r = requests.get(url, headers=HEADERS, timeout=15)
         
-        if r.status_code == 404:
+        # 404 ya 400 = banned/not found
+        if r.status_code in (404, 400):
             return "banned"
         
-        if r.status_code == 429:
-            log.warning(f"@{username} rate limited — skipping")
-            return "error"
-        
+        # 200 = account exists
         if r.status_code == 200:
-            text = r.text
-            if '"user":null' in text and '"viewer":null' in text:
-                return "banned"
-            if "Sorry, this page isn" in text:
-                return "banned"
-            if "PageNotFound" in text and "og:title" not in text:
-                return "banned"
-            if '"username":"' + username + '"' in text.lower():
+            data = r.json()
+            if data.get("author_name"):
                 return "active"
-            if '"biography":' in text:
-                return "active"
-            if 'profile_pic_url' in text:
-                return "active"
+            return "banned"
+        
+        # 429 = rate limited
+        if r.status_code == 429:
+            log.warning(f"@{username} rate limited")
             return "error"
         
         return "error"
