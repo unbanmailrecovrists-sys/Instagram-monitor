@@ -4,59 +4,68 @@ import cloudscraper
 import re
 import os
 
-# --- CONFIG ---
+# Render Variables
 TOKEN = os.environ.get('DISCORD_TOKEN')
-PROXY = os.environ.get('PROXY_URL') # Format: http://user:pass@ip:port
-TARGET_CHANNEL = int(os.environ.get('CHANNEL_ID', 0))
-ACCOUNTS = ["zuck", "instagram", "croprated"]
+PROXY = os.environ.get('PROXY_URL') 
+CHANNEL_ID = int(os.environ.get('CHANNEL_ID', 0))
+
+# Monitoring List
+ACCOUNTS = ["zuck", "croprated", "urx.rupesh"]
 
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 scraper = cloudscraper.create_scraper()
 
-def check_ig_advanced(username):
+def check_instagram(username):
     url = f"https://www.instagram.com/{username}/"
-    proxies = {"http": PROXY, "https": PROXY} if PROXY else None
+    # Proxy Setup
+    proxies = {"http": PROXY, "https": PROXY}
     
     try:
-        # Request bhejna (Proxy ke saath)
+        # Request with Proxy
         response = scraper.get(url, proxies=proxies, timeout=15)
-        content = response.text
+        html = response.text
 
-        # 1. Direct Ban Check (404)
+        # 1. Check for 404 (Direct Ban)
         if response.status_code == 404:
             return "🔴 BANNED (404)"
 
-        # 2. Advanced HTML Check (Followers/Posts/Bio)
-        # Hum 'og:description' dhoondte hain jisme followers ka count hota hai
-        meta_data = re.search(r'<meta content="(.*?)" name="description"', content)
+        # 2. Extract Followers/Posts from Meta Tags
+        # Ye wahi logic hai jo pro bots use karte hain
+        meta_content = re.search(r'<meta content="(.*?)" name="description"', html)
         
-        if meta_data:
-            stats = meta_data.group(1) # Example: "10M Followers, 500 Posts..."
-            if "Followers" in stats or "Posts" in stats:
-                return f"🟢 ACTIVE ({stats})"
-        
-        # 3. Content Validation (Agar 200 OK hai par data nahi mila)
-        if "Page Not Found" in content or "link you followed may be broken" in content:
+        if meta_content:
+            data = meta_content.group(1) # Example: "10M Followers, 500 Posts"
+            if "Followers" in data and "Posts" in data:
+                return f"🟢 ACTIVE ({data})"
+
+        # 3. Validation (Status 200 but no data)
+        if "Page Not Found" in html or "Content Unavailable" in html:
             return "🔴 BANNED (Broken Link)"
-            
-        return "⚠️ RATE LIMITED (Login Wall Hit)"
+
+        # 4. Login Wall/Rate Limit
+        if response.status_code == 429 or "login" in response.url:
+            return "⚠️ RATE LIMITED (Proxy Flagged)"
+
+        return "❓ UNKNOWN STATUS"
 
     except Exception as e:
-        return f"❌ ERROR ({str(e)})"
+        return f"❌ PROXY/SERVER ERROR"
 
 @bot.event
 async def on_ready():
-    print(f"✅ Monitor Bot Online: {bot.user}")
-    auto_check.start()
+    print(f"✅ Pro Monitor Online with Proxy!")
+    monitor_task.start()
 
-@tasks.loop(minutes=30)
-async def auto_check():
-    channel = bot.get_channel(TARGET_CHANNEL)
+@tasks.loop(minutes=20)
+async def monitor_task():
+    channel = bot.get_channel(CHANNEL_ID)
     if not channel: return
     
     for user in ACCOUNTS:
-        status = check_ig_advanced(user)
+        status = check_instagram(user)
         if "BANNED" in status:
             await channel.send(f"🚨 **ALERT:** @{user} is **BANNED**!")
+        elif "RATE LIMITED" in status:
+            print(f"Warning: Proxy IP for @{user} is getting flagged.")
 
 bot.run(TOKEN)
