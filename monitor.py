@@ -1,8 +1,21 @@
-import discord
-from discord.ext import commands, tasks
-import cloudscraper
-import re
+from flask import Flask
+from threading import Thread
 import os
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Monitor is Running!"
+
+def run():
+    # Render khud PORT variable deta hai
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
 
 # --- RENDER ENVIRONMENT VARIABLES ---
 TOKEN = os.environ.get('DISCORD_TOKEN')
@@ -40,9 +53,10 @@ def check_instagram(username):
 
 @bot.event
 async def on_ready():
-    print(f"✅ Monitor Bot Online | Interval: {INTERVAL_MINS}m")
-    # Task start hone se pehle purani stop karega taaki duplicate na chale
-    if monitor_task.is_running():
+    print(f"✅ Monitor Bot Online")
+    keep_alive() # Ye line add karo port open karne ke liye
+    if not monitor_task.is_running():
+        monitor_task.start()
         monitor_task.stop()
     monitor_task.change_interval(minutes=INTERVAL_MINS)
     monitor_task.start()
