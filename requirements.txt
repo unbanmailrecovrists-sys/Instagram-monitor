@@ -1,3 +1,4 @@
 discord.py
 cloudscraper
 requests
+flask
